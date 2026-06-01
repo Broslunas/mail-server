@@ -33,6 +33,15 @@ mongo:
   connectTimeoutMS: 10000
 
 # ============================================================
+# 3b. REDIS (required for sessions, rate limiting, cache)
+# ============================================================
+redis:
+  host: "${WILDDUCK_REDIS_HOST}"   # defaults to "redis" service in docker-compose
+  port: 6379
+  # No password (local docker network)
+
+
+# ============================================================
 # 4. IMAP SERVER
 # ============================================================
 imap:

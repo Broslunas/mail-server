@@ -1,13 +1,33 @@
 services:
+  # WildDuck requires Redis for rate limiting, sessions, and caching.
+  # Local Redis (50-100 MB RAM) — saves us from paying for a managed Redis.
+  redis:
+    image: redis:7-alpine
+    container_name: wildduck-redis
+    restart: unless-stopped
+    mem_limit: 120m
+    mem_reservation: 60m
+    cpus: 0.1
+    # No persistence: Redis is used as cache, not source of truth
+    command: ["redis-server", "--maxmemory", "80mb", "--maxmemory-policy", "allkeys-lru"]
+    networks:
+      - mailnet
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 15s
+      timeout: 3s
+      retries: 3
+
   wildduck:
     image: nodemailer/wildduck:latest
     container_name: wildduck
     restart: unless-stopped
-    # Limits for Oracle Free Tier micro VM (1 GB RAM total)
-    # WildDuck + Node.js + TLS fits in ~500-700 MB
     mem_limit: 700m
     mem_reservation: 400m
     cpus: 0.7
+    depends_on:
+      redis:
+        condition: service_healthy
     # Direct ports on the Oracle VM (NOT tunneled — see docs/DNS.md)
     # Cloudflare Tunnel is only used for the REST API (port 8080)
     ports:
@@ -24,6 +44,9 @@ services:
       # MongoDB connection (uses external Atlas free M0 — keeps state outside the small VM)
       - WILDDUCK_MONGO_URL=mongodb://${MONGODB_USER}:${MONGODB_PASS}@${MONGODB_HOST}/${MONGODB_DB}?ssl=true&retryWrites=true&w=majority
       - WILDDUCK_MONGO_DB=${MONGODB_DB}
+      # Redis connection (in-network — uses service name "redis")
+      - WILDDUCK_REDIS_HOST=redis
+      - WILDDUCK_REDIS_PORT=6379
       # Public host (FQDN clients connect to)
       - WILDDUCK_HOST=${MAIL_FQDN}
       # TLS certificates (mounted from ./wildduck/tls)
