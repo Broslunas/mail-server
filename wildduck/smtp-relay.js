@@ -33,7 +33,8 @@ const server = new SMTPServer({
                 },
                 body: JSON.stringify({
                     username: auth.username,
-                    password: auth.password
+                    password: auth.password,
+                    scope: 'smtp'
                 })
             });
             const text = await res.text();
