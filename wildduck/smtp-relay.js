@@ -66,8 +66,12 @@ const server = new SMTPServer({
             }
         });
         
-        // Reenviar el stream MIME original a Mailjet
+        // Reenviar el stream MIME original a Mailjet con el sobre (envelope) explícito
         mailjetTransporter.sendMail({
+            envelope: {
+                from: session.envelope.mailFrom.address,
+                to: session.envelope.rcptTo.map(r => r.address)
+            },
             raw: stream
         }, (err, info) => {
             if (err) {
