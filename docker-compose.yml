@@ -78,6 +78,28 @@ services:
       retries: 3
       start_period: 30s
 
+  smtp-relay:
+    image: node:18-alpine
+    container_name: smtp-relay
+    restart: unless-stopped
+    working_dir: /app
+    command: sh -c "npm install smtp-server nodemailer && node smtp-relay.js"
+    ports:
+      - "587:587" # Expuesto al mundo para envío seguro
+    environment:
+      - PORT=587
+      - WILDDUCK_API_URL=http://wildduck:8080
+      - WILDDUCK_API_KEY=${WILDDUCK_API_KEY}
+      - MAILJET_USER=${MAILJET_API_KEY}
+      - MAILJET_PASS=${MAILJET_API_SECRET}
+      - TLS_KEY_PATH=/tls/tls.key
+      - TLS_CERT_PATH=/tls/tls.crt
+    volumes:
+      - ./wildduck/smtp-relay.js:/app/smtp-relay.js:ro
+      - ./wildduck/tls:/tls:ro
+    networks:
+      - mailnet
+
 networks:
   mailnet:
     driver: bridge
