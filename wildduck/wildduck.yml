@@ -56,6 +56,8 @@ imap:
   timeout: 60
   greeting: "WildDuck IMAP4rev1 ready"
   identify: {}
+  aps:
+    enabled: true
 
 # ============================================================
 # 5. POP3 SERVER
@@ -68,6 +70,8 @@ pop3:
   authTimeout: 30
   disablePlainAuth: true
   greeting: "WildDuck POP3 ready"
+  aps:
+    enabled: true
 
 # ============================================================
 # 6. SMTP SUBMISSION (port 587) - receives mail from authenticated clients
