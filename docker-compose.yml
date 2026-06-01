@@ -1,6 +1,6 @@
 services:
   wildduck:
-    image: wildduck/wildduck:latest
+    image: nodemailer/wildduck:latest
     container_name: wildduck
     restart: unless-stopped
     # Limits for Oracle Free Tier micro VM (1 GB RAM total)
@@ -8,31 +8,36 @@ services:
     mem_limit: 700m
     mem_reservation: 400m
     cpus: 0.7
+    # Direct ports on the Oracle VM (NOT tunneled — see docs/DNS.md)
+    # Cloudflare Tunnel is only used for the REST API (port 8080)
     ports:
-      - "127.0.0.1:8080:8080"   # REST API (proxied via Next.js, exposed via Cloudflare Tunnel)
-      - "127.0.0.1:2993:993"    # IMAPS
-      - "127.0.0.1:2995:995"    # POP3S
-      - "127.0.0.1:2587:587"    # SMTP submission (STARTTLS)
-      - "127.0.0.1:2143:143"    # IMAP (plaintext, STARTTLS upgrade)
-      - "127.0.0.1:2110:110"    # POP3 (plaintext, STARTTLS upgrade)
+      - "8080:8080"   # REST API (used by Next.js webmail via Cloudflare Tunnel or direct)
+      - "993:993"     # IMAPS
+      - "995:995"     # POP3S
+      - "587:587"     # SMTP submission (STARTTLS)
+      - "143:143"     # IMAP (plaintext, STARTTLS upgrade)
+      - "110:110"     # POP3 (plaintext, STARTTLS upgrade)
     environment:
+      # WildDuck reads its config from /etc/wildduck/wildduck.yml
+      # and overrides values from these env vars.
+      # The custom env prefix for wildduck config is WILDDUCK_*
       # MongoDB connection (uses external Atlas free M0 — keeps state outside the small VM)
-      - WILDduck_MONGO_URL=mongodb://${MONGODB_USER}:${MONGODB_PASS}@${MONGODB_HOST}/${MONGODB_DB}?ssl=true&retryWrites=true&w=majority
-      - WILDduck_MONGO_DB=${MONGODB_DB}
+      - WILDDUCK_MONGO_URL=mongodb://${MONGODB_USER}:${MONGODB_PASS}@${MONGODB_HOST}/${MONGODB_DB}?ssl=true&retryWrites=true&w=majority
+      - WILDDUCK_MONGO_DB=${MONGODB_DB}
       # Public host (FQDN clients connect to)
-      - WILDduck_HOST=${MAIL_FQDN}
+      - WILDDUCK_HOST=${MAIL_FQDN}
       # TLS certificates (mounted from ./wildduck/tls)
-      - WILDduck_TLS_KEY=/tls/tls.key
-      - WILDduck_TLS_CERT=/tls/tls.crt
-      - WILDduck_TLS_DHPARAM=/tls/dhparam.pem
+      - WILDDUCK_TLS_KEY=/tls/tls.key
+      - WILDDUCK_TLS_CERT=/tls/tls.crt
+      - WILDDUCK_TLS_DHPARAM=/tls/dhparam.pem
       # WildDuck admin API key (generate with: openssl rand -hex 32)
-      - WILDduck_API_KEY=${WILDDUCK_API_KEY}
+      - WILDDUCK_API_KEY=${WILDDUCK_API_KEY}
       # Mailbox defaults
-      - WILDduck_MAILBOX_DEFAULT_QUOTA=${DEFAULT_QUOTA:-104857600}
-      - WILDduck_MAILBOX_DEFAULT_MAX_MESSAGES=${DEFAULT_MAX_MESSAGES:-50000}
+      - WILDDUCK_MAILBOX_DEFAULT_QUOTA=${DEFAULT_QUOTA:-104857600}
+      - WILDDUCK_MAILBOX_DEFAULT_MAX_MESSAGES=${DEFAULT_MAX_MESSAGES:-50000}
       # Logging
       - NODE_ENV=production
-      - WILDduck_LOG_LEVEL=info
+      - WILDDUCK_LOG_LEVEL=info
     volumes:
       - ./wildduck/wildduck.yml:/etc/wildduck/wildduck.yml:ro
       - ./wildduck/tls:/tls:ro
@@ -40,29 +45,12 @@ services:
     networks:
       - mailnet
     healthcheck:
-      test: ["CMD", "curl", "-fsS", "http://localhost:8080/health"]
+      # WildDuck exposes /health on the API port (8080) by default
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:8080/health"]
       interval: 30s
       timeout: 5s
       retries: 3
       start_period: 30s
-
-  haraka-relay:
-    # SMTP submission relay: authenticates users via WildDuck API,
-    # then forwards outbound mail to Mailjet SMTP. Lets Thunderbird
-    # send through your own domain (submission@yourdomain) instead of
-    # configuring Mailjet's SMTP directly.
-    image: haraka/haraka:latest
-    container_name: haraka-relay
-    restart: unless-stopped
-    mem_limit: 200m
-    cpus: 0.2
-    ports:
-      - "127.0.0.1:22587:2587"   # Submission port (separate from WildDuck's 587)
-    volumes:
-      - ./wildduck/haraka-config:/etc/haraka:ro
-    networks:
-      - mailnet
-    profiles: ["with-relay"]  # Enable with: docker-compose --profile with-relay up
 
 networks:
   mailnet:
