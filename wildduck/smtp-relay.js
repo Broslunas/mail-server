@@ -25,7 +25,7 @@ const server = new SMTPServer({
     async onAuth(auth, session, callback) {
         try {
             console.log(`[onAuth] Intentando autenticar usuario: ${auth.username}`);
-            const res = await fetch(`${WILDDUCK_API_URL}/users/authenticate`, {
+            const res = await fetch(`${WILDDUCK_API_URL}/authenticate`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
