@@ -24,6 +24,7 @@ const server = new SMTPServer({
     // Autenticar contra la API de WildDuck
     async onAuth(auth, session, callback) {
         try {
+            console.log(`[onAuth] Intentando autenticar usuario: ${auth.username}`);
             const res = await fetch(`${WILDDUCK_API_URL}/users/authenticate`, {
                 method: 'POST',
                 headers: {
@@ -35,14 +36,19 @@ const server = new SMTPServer({
                     password: auth.password
                 })
             });
-            const data = await res.json();
-            if (res.ok && (data.status === 'ok' || data.user)) {
+            const text = await res.text();
+            console.log(`[onAuth] Respuesta de WildDuck API (status: ${res.status}):`, text);
+            
+            let data;
+            try { data = JSON.parse(text); } catch(e) {}
+
+            if (res.ok && data && (data.status === 'ok' || data.user || data.success)) {
                 session.userEmail = auth.username;
                 return callback(null, { user: auth.username });
             }
             return callback(new Error('Authentication failed'));
         } catch (err) {
-            console.error('Auth error:', err);
+            console.error('[onAuth] Error de conexión con API:', err);
             return callback(new Error('Authentication service temporarily unavailable'));
         }
     },
