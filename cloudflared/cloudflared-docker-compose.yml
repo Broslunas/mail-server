@@ -1,0 +1,32 @@
+# Append this service to the main docker-compose.yml (or run separately).
+# This is a STANDALONE cloudflared container that does not need the
+# main docker-compose up — it only needs the tunnel credentials file.
+
+services:
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    container_name: cloudflared
+    restart: unless-stopped
+    mem_limit: 80m
+    cpus: 0.1
+    command: tunnel --config /etc/cloudflared/config.yml run
+    environment:
+      - TUNNEL_ID=${TUNNEL_ID}
+      - WEBMAIL_DOMAIN=${WEBMAIL_DOMAIN}
+      - API_SUBDOMAIN=${API_SUBDOMAIN}
+      - PUBLIC_ROOT_DOMAIN=${PUBLIC_ROOT_DOMAIN}
+    volumes:
+      - ./cloudflared/config.yml:/etc/cloudflared/config.yml:ro
+      - ./cloudflared/${TUNNEL_ID}.json:/etc/cloudflared/${TUNNEL_ID}.json:ro
+    networks:
+      - mailnet
+    healthcheck:
+      test: ["CMD", "cloudflared", "tunnel", "info"]
+      interval: 60s
+      timeout: 10s
+      retries: 3
+
+networks:
+  mailnet:
+    external: true
+    name: mail-server_mailnet

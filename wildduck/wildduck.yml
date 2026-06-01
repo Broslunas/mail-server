@@ -1,0 +1,197 @@
+# WildDuck Mail Server Configuration
+# This config is mounted into the container at /etc/wildduck/wildduck.yml
+# Generated for self-hosted IMAP/POP3 + SMTP submission on Oracle Free Tier
+# Documentation: https://docs.wildduck.email/
+
+# ============================================================
+# 1. CORE SERVER SETTINGS
+# ============================================================
+identifier: "wildduck"
+host: "${WILDduck_HOST}"   # FQDN clients connect to (e.g. mail.broslunas.com)
+
+# ============================================================
+# 2. TLS / SSL
+# ============================================================
+tls:
+  key: "/tls/tls.key"
+  cert: "/tls/tls.crt"
+  dhparam: "/tls/dhparam.pem"   # Generate with: openssl dhparam -dsaparam -out dhparam.pem 2048
+  protocols: ["TLSv1.2", "TLSv1.3"]
+  ciphers: "ECDHE+AESGCM:DHE+AESGCM:ECDHE+CHACHA20:DHE+CHACHA20:!aNULL:!MD5:!DSS"
+  honorCipherOrder: true
+  minVersion: "TLSv1.2"
+
+# ============================================================
+# 3. MONGO DATABASE
+# ============================================================
+mongo:
+  url: "${WILDduck_MONGO_URL}"
+  database: "${WILDduck_MONGO_DB}"
+  # Connection pool tuning for small VM
+  poolSize: 10
+  socketTimeoutMS: 30000
+  connectTimeoutMS: 10000
+
+# ============================================================
+# 4. IMAP SERVER
+# ============================================================
+imap:
+  enabled: true
+  port: 143
+  sslPort: 993
+  max: 200
+  # Auth handlers
+  authTimeout: 30
+  # Disable plain auth on plain port (force STARTTLS upgrade)
+  disablePlainAuth: true
+  timeout: 60
+  greeting: "WildDuck IMAP4rev1 ready"
+  identify: {}
+
+# ============================================================
+# 5. POP3 SERVER
+# ============================================================
+pop3:
+  enabled: true
+  port: 110
+  sslPort: 995
+  max: 100
+  authTimeout: 30
+  disablePlainAuth: true
+  greeting: "WildDuck POP3 ready"
+
+# ============================================================
+# 6. SMTP SUBMISSION (port 587) - receives mail from authenticated clients
+# Outbound delivery is then handled by Haraka relay -> Mailjet
+# ============================================================
+smtp:
+  enabled: true
+  port: 25
+  submissionPort: 587
+  submissionSSLPort: 465
+  maxClients: 100
+  size: 26214400          # 25 MB max message size
+  authTimeout: 30
+  disablePlainAuth: true
+  # We do NOT expose port 25 to the internet. Cloudflare Email Routing
+  # already handles inbound mail via worker.js -> /api/emails/ingress.
+  # WildDuck's SMTP listener exists for local relay/queue management only.
+  hostname: "${WILDduck_HOST}"
+
+# ============================================================
+# 7. API SERVER (REST) - Used by Next.js to manage users
+# ============================================================
+api:
+  enabled: true
+  port: 8080
+  host: "0.0.0.0"
+  # Pre-shared API key (must match WILDDUCK_API_KEY env on Next.js side)
+  key: "${WILDduck_API_KEY}"
+  # CORS: only allow the webmail origin
+  cors:
+    origin: ["https://${WEBMAIL_DOMAIN}"]
+    credentials: true
+  rateLimit:
+    max: 100
+    windowMs: 60000
+
+# ============================================================
+# 8. AUTHENTICATION
+# ============================================================
+auth:
+  # Standard username/password (bcrypt-hashed in MongoDB)
+  plainOnly: false
+  # Application passwords: users generate per-device passwords from the webmail UI
+  applicationPasswords:
+    enabled: true
+    # Min length for app passwords
+    minLength: 16
+    # Max active app passwords per user
+    maxPerUser: 20
+  # Rate-limit failed logins
+  ratelimit:
+    max: 5
+    windowMs: 300000   # 5 min
+
+# ============================================================
+# 9. DKIM SIGNING
+# ============================================================
+dkim:
+  # Domain -> selector -> private key file
+  # Generate with: openssl genrsa -out dkim/dkim_broslunas.pem 2048
+  # Then publish DNS: dkim._domainkey.broslunas.com TXT "v=DKIM1; k=rsa; p=..."
+  # Restart WildDuck after adding a domain
+  keys: []
+  # Path resolved at runtime
+  keysPath: "/dkim"
+
+# ============================================================
+# 10. MAILBOX DEFAULTS
+# ============================================================
+mailboxes:
+  defaultQuota: 104857600          # 100 MB default quota
+  defaultMaxMessages: 50000
+  defaultMaxStoragePerMessage: 26214400  # 25 MB per message
+  hashPassword: true
+  # Address tags: user+tag@domain handled natively
+  addressTags: true
+
+# ============================================================
+# 11. GRAYLISTING & SPAM (basic anti-spam at SMTP layer)
+# ============================================================
+greylist:
+  enabled: false   # We don't accept inbound SMTP directly (Cloudflare handles it)
+
+spam: {}
+
+# ============================================================
+# 12. LOGGING
+# ============================================================
+log:
+  level: "info"
+  syslog: false
+  raw: false   # set true to log credentials (NEVER enable in production)
+
+# ============================================================
+# 13. WEBMAIL INTEGRATION
+# ============================================================
+# WildDuck's API is consumed by the Next.js webmail to:
+# - Provision a WildDuck user when an admin creates a mailbox
+# - Generate / revoke application passwords
+# - Push messages received by Cloudflare (worker.js) into WildDuck
+#   so they appear via IMAP. This is done by calling:
+#   POST /users/{id}/mailbox with the raw MIME message.
+# See /src/app/api/imap/sync-inbound/route.ts for the integration.
+
+# ============================================================
+# 14. DEFAULTS for new users
+# ============================================================
+defaults:
+  # When a new mailbox is created, these special folders are created
+  folders:
+    - "INBOX"
+    - "Drafts"
+    - "Sent"
+    - "Junk"
+    - "Trash"
+    - "Archive"
+  # Default retention policies
+  retention:
+    - name: "trash"
+      expire: 30   # days
+    - name: "junk"
+      expire: 30
+
+# ============================================================
+# 15. PERFORMANCE / RAM TUNING (Oracle Free Tier micro)
+# ============================================================
+# WildDuck's defaults assume multi-GB servers. We override
+# the heaviest options to fit inside ~700 MB.
+cache:
+  enabled: true
+  ttl: 300
+  max: 1000
+
+# Disable unused features to save RAM
+filters:
+  enabled: false   # Sieve scripts: enable only if you plan to use them

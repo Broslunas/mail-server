@@ -1,0 +1,42 @@
+# ============================================================
+# Cloudflare Tunnel Configuration
+#
+# IMPORTANT: Cloudflare Tunnel free tier only supports HTTP/HTTPS
+# ingress. For IMAP/POP3/SMTP (arbitrary TCP), the ports must be
+# opened DIRECTLY on the Oracle VM and secured with Oracle's
+# network security list. This config exposes:
+#
+#   - The Next.js webmail (HTTPS)
+#   - The WildDuck REST API (HTTPS, used by the webmail backend)
+#
+# IMAP/POP3/SMTP ports (143/993/110/995/587) are NOT tunneled.
+# They are exposed on the Oracle public IP via the security list.
+# See mail-server/docs/DNS.md for the full network diagram.
+# ============================================================
+
+tunnel: ${TUNNEL_ID}
+credentials-file: /etc/cloudflared/${TUNNEL_ID}.json
+
+# Recommended originRequest settings for a low-RAM server
+originRequest:
+  connectTimeout: 30s
+  noHappyEyeballs: true
+  keepAliveConnections: 4
+  keepAliveTimeout: 90s
+  httpHostHeader: ${WEBMAIL_DOMAIN}
+
+ingress:
+  # Rule 1: Next.js webmail on production (e.g. mail.broslunas.com)
+  - hostname: ${WEBMAIL_DOMAIN}
+    service: http://127.0.0.1:3000
+    originRequest:
+      httpHostHeader: ${WEBMAIL_DOMAIN}
+
+  # Rule 2: WildDuck REST API for the webmail (API key auth + CORS)
+  - hostname: ${API_SUBDOMAIN}.${PUBLIC_ROOT_DOMAIN}
+    service: http://127.0.0.1:8080
+    originRequest:
+      httpHostHeader: ${API_SUBDOMAIN}.${PUBLIC_ROOT_DOMAIN}
+
+  # Catch-all: 404
+  - service: http_status:404
