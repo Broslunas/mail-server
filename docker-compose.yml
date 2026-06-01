@@ -59,8 +59,8 @@ services:
       - WILDDUCK_MAILBOX_DEFAULT_QUOTA=${DEFAULT_QUOTA:-104857600}
       - WILDDUCK_MAILBOX_DEFAULT_MAX_MESSAGES=${DEFAULT_MAX_MESSAGES:-50000}
       # Enable Application Specific Passwords
-      - WILDDUCK_IMAP_APS_ENABLED=true
-      - WILDDUCK_POP3_APS_ENABLED=true
+      - APPCONF_imap_aps_enabled=true
+      - APPCONF_pop3_aps_enabled=true
       # Logging
       - NODE_ENV=production
       - WILDDUCK_LOG_LEVEL=info
